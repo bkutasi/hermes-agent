@@ -27,6 +27,15 @@ logger = logging.getLogger(__name__)
 # scrubbing.
 _SURROGATE_RE = re.compile(r'[\ud800-\udfff]')
 
+# LiteLLM Anthropic prompt template injects this when user/assistant text
+# is empty/whitespace (anthropic_messages_pt always; see factory.py
+# _EMPTY_TEXT_PLACEHOLDER).  Must never re-enter Hermes history,
+# final_response, or Telegram delivery — empty tool-call turns + /stop
+# otherwise flood the transcript with this exact string.
+LITELLM_EMPTY_TEXT_PLACEHOLDER = (
+    "[System: Empty message content sanitised to satisfy protocol]"
+)
+
 
 def _sanitize_surrogates(text: str) -> str:
     """Replace lone surrogate code points with U+FFFD (replacement character).
@@ -279,6 +288,62 @@ def _repair_tool_call_arguments(raw_args: str, tool_name: str = "?") -> str:
     return "{}"
 
 
+def is_litellm_empty_text_placeholder(text: Any) -> bool:
+    """True when *text* is exactly LiteLLM's empty-content placeholder."""
+    return isinstance(text, str) and text.strip() == LITELLM_EMPTY_TEXT_PLACEHOLDER
+
+
+def strip_litellm_empty_text_placeholder(text: Any) -> Any:
+    """Return '' when *text* is the LiteLLM empty placeholder; else *text*.
+
+    Mirrors cron's strip of ``(No response generated)`` — placeholder-only
+    turns are treated as empty so delivery/history stay quiet.
+    """
+    if is_litellm_empty_text_placeholder(text):
+        return ""
+    return text
+
+
+def strip_litellm_empty_placeholders_from_messages(messages: list) -> int:
+    """Clear LiteLLM empty-text placeholders from user/assistant content.
+
+    Operates on the per-call api_messages copy (shallow-copied dicts).
+    Empty tool-call assistant turns often have content set to the
+    placeholder after an Anthropic LiteLLM hop; rewriting back to ''
+    stops re-injection and Telegram reply-to pollution.
+
+    Returns the number of messages rewritten.
+    """
+    rewritten = 0
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        if msg.get("role") not in ("user", "assistant"):
+            continue
+        content = msg.get("content")
+        if isinstance(content, str) and is_litellm_empty_text_placeholder(content):
+            msg["content"] = ""
+            rewritten += 1
+            continue
+        if isinstance(content, list):
+            changed = False
+            new_blocks = []
+            for block in content:
+                if (
+                    isinstance(block, dict)
+                    and block.get("type") == "text"
+                    and is_litellm_empty_text_placeholder(block.get("text"))
+                ):
+                    new_blocks.append({**block, "text": ""})
+                    changed = True
+                else:
+                    new_blocks.append(block)
+            if changed:
+                msg["content"] = new_blocks
+                rewritten += 1
+    return rewritten
+
+
 def close_interrupted_tool_sequence(messages: list, final_response: Any = None) -> bool:
     """Append a synthetic assistant turn when an interrupted tail is a tool result.
 
@@ -463,6 +528,10 @@ def _sanitize_structure_non_ascii(payload: Any) -> bool:
 
 __all__ = [
     "_SURROGATE_RE",
+    "LITELLM_EMPTY_TEXT_PLACEHOLDER",
+    "is_litellm_empty_text_placeholder",
+    "strip_litellm_empty_text_placeholder",
+    "strip_litellm_empty_placeholders_from_messages",
     "close_interrupted_tool_sequence",
     "_sanitize_surrogates",
     "_sanitize_structure_surrogates",

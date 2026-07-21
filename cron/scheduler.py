@@ -3373,6 +3373,11 @@ def run_job(
         # Strip leaked placeholder text that upstream may inject on empty completions.
         if final_response.strip() == "(No response generated)":
             final_response = ""
+        # LiteLLM Anthropic empty-text placeholder (factory.py
+        # _EMPTY_TEXT_PLACEHOLDER) — treat as empty for cron silence.
+        from agent.message_sanitization import strip_litellm_empty_text_placeholder
+
+        final_response = strip_litellm_empty_text_placeholder(final_response) or ""
         # Cron silence on abnormal empty turns.  The turn-completion explainer
         # (#34452) replaces a blank/empty model turn with a "⚠️ No reply: …"
         # string so interactive surfaces (CLI/gateway) explain why the box is

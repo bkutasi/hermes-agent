@@ -770,3 +770,49 @@ def test_sanitize_preserves_populated_tool_calls():
     out = sanitize_api_messages(list(messages))
     assistant = [m for m in out if m.get("role") == "assistant"][0]
     assert [tc["id"] for tc in assistant["tool_calls"]] == ["call_Z"]
+
+
+def test_sanitize_strips_litellm_empty_text_placeholder():
+    """LiteLLM Anthropic empty-text placeholder must not re-enter the API.
+
+    After an Anthropic-format hop LiteLLM rewrites empty assistant text to
+    ``[System: Empty message content sanitised to satisfy protocol]``.
+    Tool-call-only turns then flood history/Telegram with that string.
+    The pre-call sanitizer clears it on the per-call copy.
+    """
+    from agent.agent_runtime_helpers import sanitize_api_messages
+    from agent.message_sanitization import LITELLM_EMPTY_TEXT_PLACEHOLDER
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": LITELLM_EMPTY_TEXT_PLACEHOLDER,
+            "tool_calls": [
+                {
+                    "id": "call_Z",
+                    "type": "function",
+                    "function": {"name": "foo", "arguments": "{}"},
+                },
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_Z", "content": "r"},
+        {"role": "user", "content": LITELLM_EMPTY_TEXT_PLACEHOLDER},
+    ]
+    out = sanitize_api_messages(list(messages))
+    assistant = [m for m in out if m.get("role") == "assistant"][0]
+    user = [m for m in out if m.get("role") == "user"][0]
+    assert assistant["content"] == ""
+    assert user["content"] == ""
+    assert [tc["id"] for tc in assistant["tool_calls"]] == ["call_Z"]
+
+
+def test_strip_litellm_placeholder_helper_exact_only():
+    from agent.message_sanitization import (
+        LITELLM_EMPTY_TEXT_PLACEHOLDER,
+        strip_litellm_empty_text_placeholder,
+    )
+
+    assert strip_litellm_empty_text_placeholder(LITELLM_EMPTY_TEXT_PLACEHOLDER) == ""
+    assert strip_litellm_empty_text_placeholder("  " + LITELLM_EMPTY_TEXT_PLACEHOLDER + "  ") == ""
+    assert strip_litellm_empty_text_placeholder("real answer") == "real answer"
+    assert strip_litellm_empty_text_placeholder(None) is None

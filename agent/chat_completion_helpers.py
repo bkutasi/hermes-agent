@@ -1121,6 +1121,12 @@ def build_assistant_message(agent, assistant_message, finish_reason: str) -> dic
     if reasoning_text:
         reasoning_text = _sanitize_surrogates(reasoning_text)
 
+    # Strip LiteLLM Anthropic empty-text placeholder if the model/proxy
+    # echoed it as assistant content — never persist it into history.
+    from agent.message_sanitization import strip_litellm_empty_text_placeholder
+
+    _san_content = strip_litellm_empty_text_placeholder(_san_content)
+
     # Strip inline reasoning tags (<think>…</think> etc.) from the stored
     # assistant content.  Reasoning was already captured into
     # ``reasoning_text`` above (either from structured fields or the

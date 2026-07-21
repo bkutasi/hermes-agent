@@ -51,6 +51,13 @@ def finalize_turn(
     """
     from agent.conversation_loop import logger
 
+    # Strip LiteLLM empty-text placeholder before any delivery / history
+    # append. Same pattern as cron's ``(No response generated)`` strip.
+    from agent.message_sanitization import strip_litellm_empty_text_placeholder
+
+    if isinstance(final_response, str):
+        final_response = strip_litellm_empty_text_placeholder(final_response)
+
     budget_exhausted = (
         api_call_count >= agent.max_iterations
         or agent.iteration_budget.remaining <= 0

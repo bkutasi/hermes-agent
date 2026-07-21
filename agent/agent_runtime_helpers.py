@@ -2505,6 +2505,24 @@ def sanitize_api_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]
         filtered.append(msg)
     messages = filtered
 
+    # --- Strip LiteLLM Anthropic empty-text placeholder -------------------
+    # LiteLLM rewrites empty user/assistant text to a fixed British-spelled
+    # string on Anthropic-format requests.  Once that string is in history
+    # (or echoed via Telegram reply-to) it re-enters every subsequent call.
+    # Clear it on the per-call copy so tool-call-only assistant turns stay
+    # empty rather than polluting context/delivery.
+    from agent.message_sanitization import (
+        strip_litellm_empty_placeholders_from_messages,
+    )
+
+    _placeholder_hits = strip_litellm_empty_placeholders_from_messages(messages)
+    if _placeholder_hits:
+        _ra().logger.debug(
+            "Pre-call sanitizer: cleared LiteLLM empty-text placeholder on %d "
+            "message(s)",
+            _placeholder_hits,
+        )
+
     # --- Drop empty / malformed tool_calls arrays on assistant messages ---
     # An assistant message carrying ``tool_calls: []`` (an empty array) — or a
     # non-list value under the key — is semantically identical to an assistant
