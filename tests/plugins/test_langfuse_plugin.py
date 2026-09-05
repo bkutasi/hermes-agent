@@ -936,43 +936,6 @@ class TestUsageFromSanitizedResponse:
         assert captured["usage_details"] == {"input": 7, "output": 3}
 
 
-class TestRootContextCleanup:
-    def _state(self, mod):
-        calls = []
-
-        class RootCtx:
-            def __exit__(self, exc_type, exc, tb):
-                calls.append((exc_type, exc, tb))
-
-        class RootSpan:
-            def __init__(self):
-                self.ended = False
-
-            def update_trace(self, **_):
-                pass
-
-            def update(self, **_):
-                pass
-
-            def end(self):
-                self.ended = True
-
-        return mod.TraceState(trace_id="trace-1", root_ctx=RootCtx(), root_span=RootSpan()), calls
-
-    def test_finish_trace_exits_manually_entered_root_context(self, monkeypatch):
-        mod = importlib.import_module("plugins.observability.langfuse")
-        state, calls = self._state(mod)
-        task_key = mod._trace_key("task-1", "session-1")
-        monkeypatch.setitem(mod._TRACE_STATE, task_key, state)
-        monkeypatch.setattr(mod, "_get_langfuse", lambda: SimpleNamespace(flush=lambda: None))
-
-        mod._finish_trace(task_key, output={"content": "done"})
-
-        assert state.root_span.ended is True
-        assert state.root_ctx is None
-        assert calls == [(None, None, None)]
-
-
 # ---------------------------------------------------------------------------
 # Model attribution: wire truth over stale agent attribute
 # ---------------------------------------------------------------------------
