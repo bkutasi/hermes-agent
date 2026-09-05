@@ -274,6 +274,9 @@ def _sanitize_node(node: Any, path: str) -> Any:
         # anomalyco/opencode#31877.
         if key == "type" and isinstance(value, list):
             _normalize_type_array(value, out)
+        elif key == "type" and isinstance(value, str) and value not in _BARE_TYPE_NAMES:
+            logger.debug("schema_sanitizer[%s]: coercing invalid type %r to object", path, value)
+            out[key] = "object"
         elif key in {"properties", "$defs", "definitions"} and isinstance(value, dict):
             renames = prop_renames if key == "properties" else {}
             out[key] = {

@@ -573,14 +573,15 @@ def _end_children(state: TraceState, *, include_subagents: bool = False) -> None
 
 
 def _end_root(state: TraceState, label: str) -> None:
-    """End the root span then unwind its context; never raises."""
+    """End the root span then unwind its context exactly once; never raises."""
+    root_ctx, state.root_ctx = state.root_ctx, None
     with _failsafe(label):
         state.root_span.end()
-        # Unwind the root context manager now, while opentelemetry.trace.Span is
-        # still a real type; GC-driven close at interpreter teardown raises
-        # TypeError inside use_span's isinstance check.
-        if state.root_ctx is not None:
-            state.root_ctx.__exit__(None, None, None)
+    # Unwind while opentelemetry.trace.Span is still a real type; GC-driven
+    # close at interpreter teardown raises inside use_span's isinstance check.
+    if root_ctx is not None:
+        with _failsafe(f"{label} context exit"):
+            root_ctx.__exit__(None, None, None)
 
 
 def _finalize_all_traces() -> None:

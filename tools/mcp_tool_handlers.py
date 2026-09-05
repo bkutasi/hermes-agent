@@ -91,16 +91,13 @@ def _acquire_call_server(server_name: str, tool_timeout: float):
 
 
 def _result_is_error(result) -> bool:
-    """True only for a JSON payload carrying an ``error`` key (non-JSON = success)."""
-    try:
-        return "error" in json.loads(result)
-    except (json.JSONDecodeError, TypeError):
-        return False
+    """A returned MCP application error still proves the transport is healthy."""
+    return False
 
 
 def _record_call_outcome(server_name: str, result) -> Any:
-    """Breaker bookkeeping: an error payload from the tool itself still counts as a strike."""
-    (_core._bump_server_error if _result_is_error(result) else _core._reset_server_error)(server_name)
+    """A returned MCP application error still proves the transport is healthy."""
+    _core._reset_server_error(server_name)
     return result
 
 

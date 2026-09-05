@@ -52,12 +52,15 @@ def _filter_capabilities(value: Any) -> Dict[str, bool]:
 
 
 def _lift_model_capabilities(entry: Dict[str, Any], model: Optional[str], result: Dict[str, Any]) -> None:
-    """Copy explicit boolean per-model capabilities into the runtime."""
+    """Copy explicit per-model capabilities and api_mode into the runtime."""
     capabilities = _filter_capabilities(entry.get("capabilities"))
     models = entry.get("models")
     model_config = models.get(model) if isinstance(models, dict) and model else None
     if isinstance(model_config, dict):
         capabilities.update(_filter_capabilities(model_config))
+        api_mode = _rp()._parse_api_mode(model_config.get("api_mode") or model_config.get("transport"))
+        if api_mode:
+            result["api_mode"] = api_mode
     if capabilities:
         result["capabilities"] = capabilities
 
@@ -136,6 +139,8 @@ def _match_new_style_provider(requested_norm: str, providers: Dict[str, Any]) ->
             continue
         result: Dict[str, Any] = {"name": entry.get("name", ep_name), "base_url": base_url.strip(),
                                   "api_key": api_key or _clean(entry.get("api_key", "")), "model": entry.get("default_model", "")}
+        if isinstance(entry.get("models"), dict):
+            result["models"] = entry["models"]
         # Command that PRINTS a short-lived credential; wrapped in a per-request token provider.
         key_cmd = _clean(entry.get("key_cmd", ""))
         if key_cmd:
@@ -160,6 +165,8 @@ def _match_legacy_custom_provider(requested_norm: str, custom_providers) -> Opti
         if requested_norm not in custom_provider_aliases(name, provider_key):
             continue
         result = {"name": name.strip(), "base_url": base_url.strip(), "api_key": _clean(entry.get("api_key", ""))}
+        if isinstance(entry.get("models"), dict):
+            result["models"] = entry["models"]
         model_name = _clean(entry.get("model", ""))
         if model_name:
             result["model"] = model_name
@@ -481,8 +488,12 @@ def _resolve_named_custom_runtime(*, requested_provider: str, explicit_api_key: 
     base_url = ((explicit_base_url or "").strip() or custom_provider.get("base_url", "")).rstrip("/")
     if not base_url:
         return None
+    effective_model = target_model or custom_provider.get("model")
+    runtime_fields: Dict[str, Any] = {}
+    _lift_model_capabilities(custom_provider, effective_model, runtime_fields)
+    api_mode = runtime_fields.get("api_mode") or custom_provider.get("api_mode")
     pool_result = rp._try_resolve_from_custom_pool(
-        base_url, "custom", custom_provider.get("api_mode"),
+        base_url, "custom", api_mode,
         provider_name=custom_provider.get("provider_key") or custom_provider.get("name"),
     )
     if pool_result:
@@ -506,7 +517,7 @@ def _resolve_named_custom_runtime(*, requested_provider: str, explicit_api_key: 
         token_provider = build_command_token_provider(key_cmd, str(custom_provider.get("name", requested_provider) or "custom"))
         if token_provider is not None:
             api_key = token_provider
-    result = _custom_runtime(rp, base_url, api_key, custom_provider.get("api_mode"),
+    result = _custom_runtime(rp, base_url, api_key, api_mode,
                              source=f"custom_provider:{custom_provider.get('name', requested_provider)}",
                              requested_provider=requested_provider)
     _apply_custom_provider_extras(custom_provider, target_model, result)

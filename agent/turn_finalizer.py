@@ -448,6 +448,10 @@ def finalize_turn(
         logger=logger,
     )
 
+    if isinstance(final_response, str):
+        from agent.message_sanitization import strip_litellm_empty_text_placeholder
+        final_response = strip_litellm_empty_text_placeholder(final_response)
+
     completed = (
         final_response is not None
         and not failed
