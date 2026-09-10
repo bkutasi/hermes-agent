@@ -321,14 +321,6 @@ class VisionMessagePrepMixin:
             # AWS Bedrock runtime endpoints — defense-in-depth when
             # ``provider`` is unset but ``base_url`` still names Bedrock.
             or host.startswith("bedrock-runtime.")
-            # Third-party Anthropic-compatible custom proxies preserve model
-            # identifiers verbatim; only the direct Anthropic API wants dots
-            # normalized to hyphens.
-            or (
-                (getattr(self, "provider", "") or "").lower() == "custom"
-                and host != "api.anthropic.com"
-                and not base_url_host_matches(base, "amazonaws.com")
-            )
         )
 
     def _is_qwen_portal(self) -> bool:

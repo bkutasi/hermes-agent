@@ -20,10 +20,6 @@ logger = logging.getLogger(__name__)
 # CLI paste scrubbing.
 _SURROGATE_RE = re.compile(r'[\ud800-\udfff]')
 
-# LiteLLM's Anthropic prompt template substitutes this fixed string for empty
-# user/assistant text. It must not become durable history or delivery text.
-LITELLM_EMPTY_TEXT_PLACEHOLDER = "[System: Empty message content sanitised to satisfy protocol]"
-
 # Keys handled explicitly by _sanitize_messages; every OTHER key is swept generically.
 _MESSAGE_CORE_KEYS = frozenset({"content", "name", "tool_calls", "role"})
 
@@ -88,41 +84,6 @@ def _sanitize_messages(messages: list, fix: Callable[[str], str], *, deep: bool)
             elif deep and isinstance(value, (dict, list)):
                 found |= _sanitize_structure(value, fix)
     return found
-
-
-def is_litellm_empty_text_placeholder(text: Any) -> bool:
-    """Whether *text* is LiteLLM's exact empty-content placeholder."""
-    return isinstance(text, str) and text.strip() == LITELLM_EMPTY_TEXT_PLACEHOLDER
-
-
-def strip_litellm_empty_text_placeholder(text: Any) -> Any:
-    """Replace LiteLLM's empty-content placeholder with an empty string."""
-    return "" if is_litellm_empty_text_placeholder(text) else text
-
-
-def strip_litellm_empty_placeholders_from_messages(messages: list) -> int:
-    """Clear LiteLLM placeholders from user/assistant content in place."""
-    rewritten = 0
-    for message in messages:
-        if not isinstance(message, dict) or message.get("role") not in {"user", "assistant"}:
-            continue
-        content = message.get("content")
-        if is_litellm_empty_text_placeholder(content):
-            message["content"] = ""
-            rewritten += 1
-        elif isinstance(content, list):
-            changed = False
-            parts = []
-            for part in content:
-                if isinstance(part, dict) and part.get("type") == "text" and is_litellm_empty_text_placeholder(part.get("text")):
-                    parts.append({**part, "text": ""})
-                    changed = True
-                else:
-                    parts.append(part)
-            if changed:
-                message["content"] = parts
-                rewritten += 1
-    return rewritten
 
 
 # In-place sanitizers; each returns True when anything changed. Surrogate repair is deep
@@ -324,9 +285,7 @@ def _looks_like_image_content_rejection(error_body: str) -> bool:
 
 
 __all__ = [
-    "_SURROGATE_RE", "LITELLM_EMPTY_TEXT_PLACEHOLDER",
-    "is_litellm_empty_text_placeholder", "strip_litellm_empty_text_placeholder",
-    "strip_litellm_empty_placeholders_from_messages", "close_interrupted_tool_sequence",
+    "_SURROGATE_RE", "close_interrupted_tool_sequence",
     "_sanitize_surrogates", "_sanitize_structure_surrogates", "_sanitize_messages_surrogates",
     "_escape_invalid_chars_in_json_strings", "_repair_tool_call_arguments",
     "_strip_non_ascii", "_sanitize_messages_non_ascii", "_sanitize_tools_non_ascii",

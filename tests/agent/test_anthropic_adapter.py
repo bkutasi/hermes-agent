@@ -665,21 +665,6 @@ class TestConvertTools:
         assert result[0]["input_schema"]["required"] == ["command"]
 
 
-def test_convert_tools_coerces_invalid_nested_type_string():
-    tools = [{
-        "type": "function",
-        "function": {
-            "name": "example",
-            "parameters": {
-                "type": "object",
-                "properties": {"mode": {"type": "custom"}},
-            },
-        },
-    }]
-    result = convert_tools_to_anthropic(tools)
-    assert result[0]["input_schema"]["properties"]["mode"]["type"] == "object"
-
-
 # ---------------------------------------------------------------------------
 # Message conversion
 # ---------------------------------------------------------------------------

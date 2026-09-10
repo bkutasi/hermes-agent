@@ -119,27 +119,6 @@ def _sanitize_tool_id(tool_id: str) -> str:
     return (re.sub(r"[^a-zA-Z0-9_-]", "_", tool_id) if tool_id else "") or "tool_0"
 
 
-_VALID_JSON_SCHEMA_TYPES = frozenset({"object", "string", "number", "integer", "boolean", "array", "null"})
-
-
-def _coerce_invalid_types(node: Any) -> Any:
-    """Recursively coerce non-standard JSON Schema type strings to object."""
-    if isinstance(node, list):
-        return [_coerce_invalid_types(item) for item in node]
-    if not isinstance(node, dict):
-        return node
-    out: Dict[str, Any] = {}
-    for key, value in node.items():
-        if key == "type" and isinstance(value, str) and value not in _VALID_JSON_SCHEMA_TYPES:
-            logger.debug("anthropic_message_convert: coercing invalid type %r to object", value)
-            out[key] = "object"
-        elif key in {"properties", "$defs", "definitions"} and isinstance(value, dict):
-            out[key] = {name: _coerce_invalid_types(child) for name, child in value.items()}
-        else:
-            out[key] = _coerce_invalid_types(value) if isinstance(value, (dict, list)) else value
-    return out
-
-
 def _tool_use_block(tool_id: Any, name: Any, tool_input: Any) -> Dict[str, Any]:
     return {"type": "tool_use", "id": _sanitize_tool_id(tool_id), "name": name, "input": tool_input}
 
@@ -152,8 +131,7 @@ def _normalize_tool_input_schema(schema: Any) -> Dict[str, Any]:
     generic 400, so they are dropped in favour of a plain object."""
     from tools.schema_sanitizer import strip_nullable_unions
 
-    normalized = _coerce_invalid_types(schema) if schema else None
-    normalized = strip_nullable_unions(normalized, keep_nullable_hint=False) if normalized else None
+    normalized = strip_nullable_unions(schema, keep_nullable_hint=False) if schema else None
     if not isinstance(normalized, dict):
         return dict(_EMPTY_SCHEMA)
     banned = {"oneOf", "allOf", "anyOf"}

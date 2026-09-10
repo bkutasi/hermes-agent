@@ -1437,8 +1437,6 @@ def _assistant_content_for_storage(agent, assistant_message):
     # polluted titles), then redact inlined credentials before the message enters
     # history / state.db / gateway delivery (no-op with HERMES_REDACT_SECRETS off).
     content = _sanitize_surrogates(flatten_message_text(getattr(assistant_message, "content", None)))
-    from agent.message_sanitization import strip_litellm_empty_text_placeholder
-    content = strip_litellm_empty_text_placeholder(content)
     if isinstance(content, str) and content:
         content = agent._strip_think_blocks(content).strip()
         if content:

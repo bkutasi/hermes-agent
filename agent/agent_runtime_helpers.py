@@ -2826,8 +2826,6 @@ def sanitize_api_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]
     gated on the compressor). Order matters: empty non-final messages are healed first so the
     substituted turn participates in the pairing and dedup passes."""
     messages = _drop_invalid_roles(messages)
-    from agent.message_sanitization import strip_litellm_empty_placeholders_from_messages
-    strip_litellm_empty_placeholders_from_messages(messages)
     messages = repair_empty_non_final_messages(messages)
     messages = _drop_empty_tool_calls_arrays(messages)
     _repair_nameless_tool_calls(messages)

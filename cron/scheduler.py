@@ -1786,8 +1786,6 @@ def _final_response_from_result(result: dict, job_id: str, job_name: str, AIAgen
             job_name)
 
     final_response = result.get("final_response", "") or ""
-    from agent.message_sanitization import strip_litellm_empty_text_placeholder
-    final_response = strip_litellm_empty_text_placeholder(final_response) or ""
     # Repair model-mangled computer_use media paths before delivery (fail-open, as in gateway).
     if final_response:
         from gateway.media_repair import repair_explicit_computer_use_media_paths

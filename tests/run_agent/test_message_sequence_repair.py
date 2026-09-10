@@ -755,42 +755,6 @@ def test_sanitize_drops_empty_tool_calls_array():
     assert assistant["content"] == "answer"
 
 
-def test_sanitize_strips_litellm_empty_text_placeholder():
-    from agent.agent_runtime_helpers import sanitize_api_messages
-    from agent.message_sanitization import LITELLM_EMPTY_TEXT_PLACEHOLDER
-
-    messages = [
-        {
-            "role": "assistant",
-            "content": LITELLM_EMPTY_TEXT_PLACEHOLDER,
-            "tool_calls": [{
-                "id": "call_Z",
-                "type": "function",
-                "function": {"name": "foo", "arguments": "{}"},
-            }],
-        },
-        {"role": "tool", "tool_call_id": "call_Z", "content": "r"},
-        {"role": "user", "content": LITELLM_EMPTY_TEXT_PLACEHOLDER},
-    ]
-    out = sanitize_api_messages(list(messages))
-    assert next(m for m in out if m.get("role") == "assistant")["content"] == ""
-    assert next(m for m in out if m.get("role") == "user")["content"] == ""
-
-
-def test_strip_litellm_placeholder_helper_is_exact_only():
-    from agent.message_sanitization import (
-        LITELLM_EMPTY_TEXT_PLACEHOLDER,
-        strip_litellm_empty_text_placeholder,
-    )
-
-    assert strip_litellm_empty_text_placeholder(LITELLM_EMPTY_TEXT_PLACEHOLDER) == ""
-    assert strip_litellm_empty_text_placeholder(
-        f"  {LITELLM_EMPTY_TEXT_PLACEHOLDER}  "
-    ) == ""
-    assert strip_litellm_empty_text_placeholder("real answer") == "real answer"
-    assert strip_litellm_empty_text_placeholder(None) is None
-
-
 def test_repair_drops_stale_empty_tool_calls_on_merged_assistant():
     """repair_message_sequence must drop a stale ``tool_calls: []`` on the
     surviving message of a consecutive-assistant merge (#77921).
